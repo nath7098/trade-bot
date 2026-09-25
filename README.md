@@ -35,6 +35,7 @@ uv run mypy src
 ```
 config/default.yaml     paramètres non sensibles
 src/tradebot/config/    chargement/validation de la config et des secrets
+src/tradebot/domain/    types purs : Bar, Signal, Order, Fill, Position, Portfolio
 src/tradebot/logging_setup.py  logs console + JSON (logs/tradebot.jsonl)
 src/tradebot/cli.py     commandes `tradebot`
 tests/                  tests automatisés
@@ -43,7 +44,7 @@ tests/                  tests automatisés
 ## Roadmap
 
 0. Squelette (config, logs, CLI, CI) ✅
-1. Types du domaine (barres, ordres, positions, portefeuille)
+1. Types du domaine (barres, ordres, positions, portefeuille) ✅
 2. Données historiques (Alpaca) + cache Parquet + contrôles qualité
 3. Backtester event-driven (frais, slippage, exécution à la barre suivante)
 4. Métriques et rapports
