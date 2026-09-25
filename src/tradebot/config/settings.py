@@ -17,6 +17,9 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from tradebot.execution.costs import PRESETS, CostModel
+from tradebot.risk.sizing import SizingConfig
+
 DEFAULT_CONFIG_PATH = Path("config/default.yaml")
 
 
@@ -49,6 +52,11 @@ class AppConfig(BaseModel):
     data_feed: Literal["sip", "iex"] = "sip"
     # Début de l'historique téléchargé (Alpaca remonte à 2016 environ).
     history_start: date = date(2016, 1, 1)
+    # Coûts de transaction : nom de profil (alpaca, ibkr_fixed, ibkr_tiered, zero)
+    # ou paramètres détaillés (voir tradebot.execution.costs.CostModel).
+    costs: CostModel = PRESETS["alpaca"]
+    sizing: SizingConfig = SizingConfig()
+    allow_short: bool = False
     data_dir: Path = Path("data")
     log_dir: Path = Path("logs")
     log_level: str = "INFO"
@@ -62,6 +70,17 @@ class AppConfig(BaseModel):
             raise ValueError(
                 "le mode 'live' est désactivé : seuls 'backtest' et 'paper' sont permis"
             )
+        return value
+
+    @field_validator("costs", mode="before")
+    @classmethod
+    def _resolve_cost_preset(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            if value not in PRESETS:
+                raise ValueError(
+                    f"profil de coûts inconnu : {value} (choix : {', '.join(PRESETS)})"
+                )
+            return PRESETS[value]
         return value
 
     @field_validator("symbols")

@@ -10,6 +10,15 @@ timeframe: 1d
 # sip (toutes bourses US, recommandé) | iex
 data_feed: sip
 history_start: 2016-01-01
+# Frais : alpaca | ibkr_fixed | ibkr_tiered | zero, ou détaillé, par ex. :
+# costs: {commission_per_share: 0.005, commission_min: 1.0, commission_max_pct: 0.01, slippage_bps: 5}
+costs: alpaca
+sizing:
+  allow_fractional: true
+  cash_buffer: 0.02     # 2 % gardés en cash (écart clôture -> ouverture, frais)
+  min_trade_pct: 0.01   # ignore les ajustements < 1 % du capital
+  min_order_value: 1.0
+allow_short: false
 data_dir: data
 log_dir: logs
 log_level: INFO

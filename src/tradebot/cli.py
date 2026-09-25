@@ -74,6 +74,43 @@ def _data_check(args: argparse.Namespace) -> int:
     return status
 
 
+def _backtest(args: argparse.Namespace) -> int:
+    from tradebot.backtest import run_backtest
+    from tradebot.strategy import STRATEGIES
+
+    config = load_config(args.config)
+    setup_logging(config.log_dir, config.log_level)
+    if args.strategy not in STRATEGIES:
+        print(f"stratégie inconnue : {args.strategy} (choix : {', '.join(STRATEGIES)})")
+        return 2
+    symbols = tuple(_symbols(args, config))
+    store = ParquetBarStore(config.data_dir)
+    start = datetime.fromisoformat(args.start).replace(tzinfo=UTC) if args.start else None
+    end = datetime.fromisoformat(args.end).replace(tzinfo=UTC) if args.end else None
+    data = {s: store.load(s, config.timeframe, start, end) for s in symbols}
+    empty = [s for s, df in data.items() if df.empty]
+    if empty:
+        print(f"pas de données pour {', '.join(empty)} : lancer `tradebot data fetch`")
+        return 1
+
+    result = run_backtest(
+        STRATEGIES[args.strategy](symbols),
+        data,
+        config.initial_capital,
+        config.costs,
+        config.sizing,
+        allow_short=config.allow_short,
+    )
+    fees = result.portfolio.fees_paid
+    print(f"Stratégie        : {result.strategy} sur {', '.join(symbols)}")
+    print(f"Période          : {result.equity.index[0].date()} -> {result.equity.index[-1].date()}")
+    print(f"Capital initial  : {result.initial_cash:,.2f}")
+    print(f"Capital final    : {result.final_equity:,.2f} ({result.total_return:+.2%})")
+    print(f"Exécutions       : {len(result.fills)}, rejets : {len(result.rejected)}")
+    print(f"Commissions      : {fees:,.2f} ({fees / result.initial_cash:.2%} du capital initial)")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="tradebot")
     parser.add_argument("--version", action="version", version=f"tradebot {__version__}")
@@ -93,7 +130,14 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.set_defaults(func=_data_fetch)
     check = data_sub.add_parser("check", help="contrôler la qualité des données locales")
     check.set_defaults(func=_data_check)
-    for p in (fetch, check):
+
+    backtest = sub.add_parser("backtest", help="rejouer une stratégie sur les données locales")
+    backtest.set_defaults(func=_backtest)
+    backtest.add_argument("--strategy", default="buy_and_hold")
+    backtest.add_argument("--start", help="date de début AAAA-MM-JJ")
+    backtest.add_argument("--end", help="date de fin AAAA-MM-JJ")
+
+    for p in (fetch, check, backtest):
         p.add_argument("symbols", nargs="*", help="symboles (défaut : ceux de la config)")
     return parser
 
