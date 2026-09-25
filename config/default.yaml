@@ -7,6 +7,9 @@ initial_capital: 100
 symbols: [SPY]
 # 1d (journalier) | 1h
 timeframe: 1d
+# sip (toutes bourses US, recommandé) | iex
+data_feed: sip
+history_start: 2016-01-01
 data_dir: data
 log_dir: logs
 log_level: INFO

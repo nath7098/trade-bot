@@ -2,8 +2,8 @@
 .env
 
 # Données et journaux locaux
-data/
-logs/
+/data/
+/logs/
 
 # Python
 __pycache__/

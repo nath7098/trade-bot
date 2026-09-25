@@ -20,7 +20,14 @@ cp .env.example .env   # puis y mettre les clés PAPER (jamais commité)
 ```bash
 uv run tradebot --version
 uv run tradebot config show
+uv run tradebot data fetch          # télécharge/met à jour les symboles de la config (Alpaca)
+uv run tradebot data fetch QQQ IWM  # ou des symboles précis
+uv run tradebot data check          # contrôle qualité des données locales
 ```
+
+Les données sont stockées dans `data/1d/<SYMBOLE>.parquet` (prix ajustés des splits et
+dividendes). Seules les barres terminées sont téléchargées ; si un nouvel ajustement
+modifie l'historique, il est rechargé entièrement.
 
 ## Développement
 
@@ -36,6 +43,7 @@ uv run mypy src
 config/default.yaml     paramètres non sensibles
 src/tradebot/config/    chargement/validation de la config et des secrets
 src/tradebot/domain/    types purs : Bar, Signal, Order, Fill, Position, Portfolio
+src/tradebot/data/      source Alpaca, stockage Parquet, calendrier NYSE, contrôles qualité
 src/tradebot/logging_setup.py  logs console + JSON (logs/tradebot.jsonl)
 src/tradebot/cli.py     commandes `tradebot`
 tests/                  tests automatisés
@@ -45,7 +53,7 @@ tests/                  tests automatisés
 
 0. Squelette (config, logs, CLI, CI) ✅
 1. Types du domaine (barres, ordres, positions, portefeuille) ✅
-2. Données historiques (Alpaca) + cache Parquet + contrôles qualité
+2. Données historiques (Alpaca) + cache Parquet + contrôles qualité ✅
 3. Backtester event-driven (frais, slippage, exécution à la barre suivante)
 4. Métriques et rapports
 5. Stratégie de référence

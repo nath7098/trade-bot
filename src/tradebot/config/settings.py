@@ -8,9 +8,10 @@ Deux sources, volontairement séparées :
 
 from __future__ import annotations
 
+from datetime import date
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
@@ -44,6 +45,10 @@ class AppConfig(BaseModel):
     initial_capital: float = Field(default=100.0, gt=0)
     symbols: tuple[str, ...] = Field(default=("SPY",), min_length=1)
     timeframe: Timeframe = Timeframe.DAY
+    # Flux Alpaca : "sip" (toutes les bourses US) ou "iex" (une seule bourse, volumes partiels).
+    data_feed: Literal["sip", "iex"] = "sip"
+    # Début de l'historique téléchargé (Alpaca remonte à 2016 environ).
+    history_start: date = date(2016, 1, 1)
     data_dir: Path = Path("data")
     log_dir: Path = Path("logs")
     log_level: str = "INFO"
