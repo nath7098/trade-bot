@@ -31,9 +31,11 @@ class BacktestResult:
     strategy: str
     initial_cash: float
     equity: pd.Series  # valeur du compte à chaque clôture
+    exposure: pd.Series  # part du capital investie (brute) à chaque clôture
     fills: list[Fill]
     rejected: list[OrderRecord]
     portfolio: Portfolio
+    slippage_paid: float = 0.0
 
     @property
     def final_equity(self) -> float:
@@ -105,12 +107,14 @@ def run_backtest(
     ctx = _Context(frames)
     last_close: dict[str, float] = {}
     equity: dict[pd.Timestamp, float] = {}
+    exposure: dict[pd.Timestamp, float] = {}
 
     for ts in sorted(bars_by_time):
         bars = bars_by_time[ts]
         broker.process_bar(bars)
         last_close.update({s: b.close for s, b in bars.items()})
         equity[ts] = broker.portfolio.equity(last_close)
+        exposure[ts] = broker.portfolio.exposure(last_close) / equity[ts]
 
         now = ts.to_pydatetime()
         ctx.advance(now, bars)
@@ -130,5 +134,12 @@ def run_backtest(
     series = pd.Series(equity, dtype="float64", name="equity")
     series.index.name = "timestamp"
     return BacktestResult(
-        strategy.name, initial_cash, series, broker.fills, broker.rejected, broker.portfolio
+        strategy.name,
+        initial_cash,
+        series,
+        pd.Series(exposure, dtype="float64", name="exposure"),
+        broker.fills,
+        broker.rejected,
+        broker.portfolio,
+        broker.slippage_paid,
     )

@@ -75,8 +75,9 @@ def _data_check(args: argparse.Namespace) -> int:
 
 
 def _backtest(args: argparse.Namespace) -> int:
-    from tradebot.backtest import run_backtest
-    from tradebot.strategy import STRATEGIES
+    from tradebot.backtest import BacktestResult, compute_metrics, run_backtest, warnings_for
+    from tradebot.backtest.report import format_table, save_report
+    from tradebot.strategy import STRATEGIES, BuyAndHold
 
     config = load_config(args.config)
     setup_logging(config.log_dir, config.log_level)
@@ -93,21 +94,39 @@ def _backtest(args: argparse.Namespace) -> int:
         print(f"pas de données pour {', '.join(empty)} : lancer `tradebot data fetch`")
         return 1
 
-    result = run_backtest(
-        STRATEGIES[args.strategy](symbols),
-        data,
-        config.initial_capital,
-        config.costs,
-        config.sizing,
-        allow_short=config.allow_short,
+    def run(name: str) -> BacktestResult:
+        return run_backtest(
+            STRATEGIES[name](symbols),
+            data,
+            config.initial_capital,
+            config.costs,
+            config.sizing,
+            allow_short=config.allow_short,
+        )
+
+    # La stratégie est toujours comparée à l'achat-conservation des mêmes symboles,
+    # avec les mêmes frais.
+    results = {args.strategy: run(args.strategy)}
+    if args.strategy != BuyAndHold.name:
+        results[BuyAndHold.name] = run(BuyAndHold.name)
+    metrics = {name: compute_metrics(r) for name, r in results.items()}
+    notes = warnings_for(metrics[args.strategy])
+
+    m = metrics[args.strategy]
+    print(f"Stratégie : {args.strategy} sur {', '.join(symbols)}")
+    print(
+        f"Période   : {m.start} -> {m.end} ({m.years:.1f} ans), capital initial "
+        f"{config.initial_capital:,.2f}\n"
     )
-    fees = result.portfolio.fees_paid
-    print(f"Stratégie        : {result.strategy} sur {', '.join(symbols)}")
-    print(f"Période          : {result.equity.index[0].date()} -> {result.equity.index[-1].date()}")
-    print(f"Capital initial  : {result.initial_cash:,.2f}")
-    print(f"Capital final    : {result.final_equity:,.2f} ({result.total_return:+.2%})")
-    print(f"Exécutions       : {len(result.fills)}, rejets : {len(result.rejected)}")
-    print(f"Commissions      : {fees:,.2f} ({fees / result.initial_cash:.2%} du capital initial)")
+    print(format_table(metrics))
+    for note in notes:
+        print(f"! {note}")
+
+    if not args.no_report:
+        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        out_dir = config.report_dir / f"{stamp}_{args.strategy}"
+        save_report(out_dir, results, metrics, notes)
+        print(f"\nRapport : {out_dir}/ (equity.png, metrics.json, equity.csv, trades_*.csv)")
     return 0
 
 
@@ -136,6 +155,7 @@ def build_parser() -> argparse.ArgumentParser:
     backtest.add_argument("--strategy", default="buy_and_hold")
     backtest.add_argument("--start", help="date de début AAAA-MM-JJ")
     backtest.add_argument("--end", help="date de fin AAAA-MM-JJ")
+    backtest.add_argument("--no-report", action="store_true", help="ne pas écrire de rapport")
 
     for p in (fetch, check, backtest):
         p.add_argument("symbols", nargs="*", help="symboles (défaut : ceux de la config)")

@@ -59,6 +59,7 @@ class AppConfig(BaseModel):
     allow_short: bool = False
     data_dir: Path = Path("data")
     log_dir: Path = Path("logs")
+    report_dir: Path = Path("reports")
     log_level: str = "INFO"
 
     @field_validator("mode")

@@ -21,4 +21,5 @@ sizing:
 allow_short: false
 data_dir: data
 log_dir: logs
+report_dir: reports
 log_level: INFO

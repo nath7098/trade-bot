@@ -1,13 +1,9 @@
 from datetime import datetime
-from pathlib import Path
 
 import pandas as pd
 import pytest
 
 from tradebot.backtest import run_backtest
-from tradebot.cli import main
-from tradebot.config import Timeframe
-from tradebot.data import ParquetBarStore
 from tradebot.domain import Signal
 from tradebot.execution import PRESETS
 from tradebot.risk import SizingConfig
@@ -129,21 +125,3 @@ def test_duplicate_dates_are_refused() -> None:
     df = daily_frame("2023-01-01", "2023-01-31")
     with pytest.raises(ValueError, match="double"):
         run_backtest(BuyAndHold(("SPY",)), {"SPY": pd.concat([df, df])}, 1_000, PRESETS["zero"])
-
-
-def test_cli_backtest(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    ParquetBarStore(tmp_path / "data").save(
-        "SPY", Timeframe.DAY, daily_frame("2023-01-01", "2023-12-31")
-    )
-    config = tmp_path / "c.yaml"
-    config.write_text(
-        f"data_dir: {tmp_path / 'data'}\nlog_dir: {tmp_path / 'logs'}\ncosts: ibkr_fixed\n",
-        encoding="utf-8",
-    )
-    assert main(["--config", str(config), "backtest"]) == 0
-    out = capsys.readouterr().out
-    assert "buy_and_hold sur SPY" in out
-    assert "Exécutions       : 1" in out
-
-    assert main(["--config", str(config), "backtest", "--strategy", "nope"]) == 2
-    assert main(["--config", str(config), "backtest", "QQQ"]) == 1

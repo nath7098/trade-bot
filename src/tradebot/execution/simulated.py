@@ -37,6 +37,8 @@ class SimulatedBroker:
         self._records: dict[str, OrderRecord] = {}
         self._pending: list[str] = []
         self.fills: list[Fill] = []
+        # Coût total du slippage : écart défavorable entre le prix d'ouverture et le prix obtenu.
+        self.slippage_paid = 0.0
         self.rejected: list[OrderRecord] = []
 
     def submit(self, order: Order) -> OrderRecord:
@@ -103,6 +105,7 @@ class SimulatedBroker:
             commission,
         )
         self.portfolio.apply_fill(fill)
+        self.slippage_paid += max(0.0, order.side.sign * (price - bar.open)) * order.quantity
         record.status = OrderStatus.FILLED
         return fill
 

@@ -4,6 +4,7 @@
 # Données et journaux locaux
 /data/
 /logs/
+/reports/
 
 # Python
 __pycache__/
