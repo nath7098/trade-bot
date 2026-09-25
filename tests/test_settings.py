@@ -17,7 +17,7 @@ def test_default_config_file_is_valid() -> None:
     config = load_config(REPO_ROOT / "config" / "default.yaml")
     assert config.mode is Mode.BACKTEST
     assert config.timeframe is Timeframe.DAY
-    assert config.symbols == ("SPY",)
+    assert config.symbols == ("SPY", "QQQ", "TLT", "GLD")
 
 
 def test_load_custom_config(tmp_path: Path) -> None:

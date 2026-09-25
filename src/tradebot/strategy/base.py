@@ -10,9 +10,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from datetime import datetime
-from typing import Protocol
+from typing import Any, ClassVar, Protocol
 
 import pandas as pd
+from pydantic import BaseModel, ConfigDict
 
 from tradebot.domain import Bar, Signal
 
@@ -36,10 +37,28 @@ class StrategyContext(Protocol):
         ...
 
 
-class Strategy(ABC):
-    """Classe de base. Une instance neuve est créée pour chaque backtest."""
+class StrategyParams(BaseModel):
+    """Paramètres réglables d'une stratégie (validés, convertis depuis la config/CLI)."""
 
-    name: str = "strategy"
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class Strategy(ABC):
+    """Classe de base. Une instance neuve est créée pour chaque backtest.
+
+    Chaque stratégie déclare :
+    - `Params` : ses paramètres et leurs valeurs par défaut ;
+    - `grid` : les valeurs essayées par l'optimiseur (peu nombreuses et espacées :
+      plus on teste de combinaisons, plus le risque de surapprentissage augmente).
+    """
+
+    name: ClassVar[str] = "strategy"
+    Params: ClassVar[type[StrategyParams]] = StrategyParams
+    grid: ClassVar[dict[str, list[Any]]] = {}
+
+    def __init__(self, symbols: tuple[str, ...] = (), params: StrategyParams | None = None) -> None:
+        self.symbols = symbols
+        self.params = params if params is not None else self.Params()
 
     @abstractmethod
     def on_bar(self, ctx: StrategyContext) -> list[Signal]:

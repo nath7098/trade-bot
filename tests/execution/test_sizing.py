@@ -65,3 +65,26 @@ def test_order_ids_are_deterministic() -> None:
     again = orders_for_signals(signals, pf, {"SPY": 100.0}, NOW, NO_BUFFER, "strat")
     # Même décision au même instant -> même identifiant -> doublon détectable.
     assert first[0].client_order_id == again[0].client_order_id == "strat-SPY-20240102T2100-buy"
+
+
+def test_buys_are_scaled_down_to_available_cash() -> None:
+    # 3 positions ont monté : elles occupent 90 % du capital ; viser 25 % d'un 4e actif
+    # dépasserait le cash disponible -> l'achat est réduit au lieu d'être rejeté.
+    pf = Portfolio(100)
+    for symbol in ("A", "B", "C"):
+        pf.apply_fill(Fill(f"f{symbol}", symbol, Side.BUY, 1, 25.0, NOW))
+    prices = {"A": 30.0, "B": 30.0, "C": 30.0, "D": 10.0}  # equity = 25 + 90 = 115
+    config = SizingConfig(cash_buffer=0.02, min_trade_pct=0, min_order_value=0)
+    ((symbol, side, qty),) = sized([Signal("D", NOW, 0.25)], pf, prices, config)
+    assert (symbol, side) == ("D", Side.BUY)
+    assert qty * 10.0 == pytest.approx(25 - 0.02 * 115)  # cash - réserve
+
+
+def test_sell_proceeds_fund_buys_in_same_rebalance() -> None:
+    pf = Portfolio(100)
+    pf.apply_fill(Fill("f", "A", Side.BUY, 9.8, 10.0, NOW))  # 98 % investi
+    prices = {"A": 10.0, "B": 10.0}
+    signals = [Signal("A", NOW, 0.0), Signal("B", NOW, 1.0)]
+    result = sized(signals, pf, prices, NO_BUFFER)
+    assert ("A", Side.SELL, pytest.approx(9.8)) in result
+    assert ("B", Side.BUY, pytest.approx(10.0)) in result  # non réduit : la vente finance

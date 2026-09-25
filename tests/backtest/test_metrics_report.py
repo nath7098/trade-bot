@@ -114,12 +114,12 @@ def test_cli_backtest(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> Non
     config = tmp_path / "c.yaml"
     config.write_text(
         f"data_dir: {tmp_path / 'data'}\nlog_dir: {tmp_path / 'logs'}\n"
-        f"report_dir: {tmp_path / 'reports'}\ncosts: ibkr_fixed\n",
+        f"report_dir: {tmp_path / 'reports'}\ncosts: ibkr_fixed\nsymbols: [SPY]\n",
         encoding="utf-8",
     )
     assert main(["--config", str(config), "backtest"]) == 0
     out = capsys.readouterr().out
-    assert "buy_and_hold sur SPY" in out
+    assert "buy_and_hold (défauts) sur SPY" in out
     assert "Rendement annualisé (CAGR)" in out
     (report,) = (tmp_path / "reports").iterdir()
     assert (report / "equity.png").exists()
@@ -128,4 +128,4 @@ def test_cli_backtest(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> Non
     assert len(list((tmp_path / "reports").iterdir())) == 1
 
     assert main(["--config", str(config), "backtest", "--strategy", "nope"]) == 2
-    assert main(["--config", str(config), "backtest", "QQQ"]) == 1
+    assert main(["--config", str(config), "backtest", "QQQ"]) == 2  # pas de données

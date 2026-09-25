@@ -87,14 +87,16 @@ def test_costs_reduce_performance() -> None:
     )
 
 
-def test_gap_up_without_cash_buffer_is_rejected() -> None:
+def test_gap_up_without_cash_buffer_resizes_the_buy() -> None:
     df = daily_frame("2024-01-01", "2024-01-31")
     df.iloc[1, df.columns.get_loc("open")] = df["close"].iloc[0] * 1.03
     df.iloc[1, df.columns.get_loc("high")] = df.iloc[1][["open", "close", "high"]].max()
     no_buffer = SizingConfig(cash_buffer=0, min_trade_pct=0, min_order_value=0)
     result = run_backtest(Scripted({0: 1.0}), {"SPY": df}, 1_000, PRESETS["zero"], no_buffer)
-    assert result.fills == []
-    assert "cash insuffisant" in result.rejected[0].reason
+    # Sans réserve, l'achat est réduit au cash disponible (et compté comme tel).
+    (fill,) = result.fills
+    assert fill.quantity < 1_000 / df["close"].iloc[0]
+    assert result.resized_orders == 1
 
 
 def test_equity_accounting_identity() -> None:

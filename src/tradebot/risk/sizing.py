@@ -40,32 +40,49 @@ def orders_for_signals(
     """Calcule les ordres qui rapprochent le portefeuille des expositions cibles.
 
     `prices` : dernier prix connu de chaque symbole détenu ou visé.
+    Les achats sont réduits proportionnellement s'ils dépassent le cash disponible
+    (cash actuel + produit estimé des ventes - réserve) : pas d'effet de levier.
     """
     equity = portfolio.equity(prices)
     investable = equity * (1 - config.cash_buffer)
-    orders = []
+
+    deltas: dict[str, float] = {}
     for signal in signals:
         price = prices[signal.symbol]
-        held = portfolio.quantity(signal.symbol)
         target = signal.target_weight * investable / price
         if not config.allow_fractional:
             target = float(math.trunc(target))
-        delta = target - held
-        closing = target == 0 and held != 0
+        deltas[signal.symbol] = target - portfolio.quantity(signal.symbol)
+
+    sells = sum(-d * prices[s] for s, d in deltas.items() if d < 0)
+    buys = sum(d * prices[s] for s, d in deltas.items() if d > 0)
+    available = portfolio.cash + sells - equity * config.cash_buffer
+    if buys > 0 and buys > available:
+        scale = max(available, 0.0) / buys
+        for symbol, delta in deltas.items():
+            if delta > 0:
+                scaled = delta * scale
+                deltas[symbol] = scaled if config.allow_fractional else float(math.trunc(scaled))
+
+    orders = []
+    for symbol, delta in deltas.items():
+        price = prices[symbol]
+        held = portfolio.quantity(symbol)
+        closing = held != 0 and delta == -held
 
         value = abs(delta) * price
+        if delta == 0:
+            continue
         if value < config.min_order_value and not closing:
             continue
         if value < config.min_trade_pct * equity and not closing:
-            continue
-        if delta == 0:
             continue
 
         side = Side.BUY if delta > 0 else Side.SELL
         orders.append(
             Order(
-                client_order_id=f"{id_prefix}-{signal.symbol}-{now:%Y%m%dT%H%M}-{side.value}",
-                symbol=signal.symbol,
+                client_order_id=f"{id_prefix}-{symbol}-{now:%Y%m%dT%H%M}-{side.value}",
+                symbol=symbol,
                 side=side,
                 quantity=abs(delta),
                 created_at=now,

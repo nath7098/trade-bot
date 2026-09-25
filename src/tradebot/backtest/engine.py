@@ -36,6 +36,7 @@ class BacktestResult:
     rejected: list[OrderRecord]
     portfolio: Portfolio
     slippage_paid: float = 0.0
+    resized_orders: int = 0  # achats réduits faute de cash à l'exécution
 
     @property
     def final_equity(self) -> float:
@@ -91,8 +92,14 @@ def run_backtest(
     sizing: SizingConfig | None = None,
     *,
     allow_short: bool = False,
+    trade_start: datetime | None = None,
 ) -> BacktestResult:
-    """Rejoue `strategy` sur `data` (symbole -> barres au format standard)."""
+    """Rejoue `strategy` sur `data` (symbole -> barres au format standard).
+
+    `trade_start` : les barres antérieures servent uniquement d'historique (échauffement
+    des indicateurs) ; la stratégie n'est appelée et le capital n'est suivi qu'à partir
+    de cette date.
+    """
     sizing = sizing or SizingConfig()
     frames = {s: normalize(df) for s, df in data.items()}
     for symbol, df in frames.items():
@@ -103,20 +110,26 @@ def run_backtest(
         for ts, bar in zip(df.index, iter_bars(df, symbol), strict=True):
             bars_by_time.setdefault(ts, {})[symbol] = bar
 
-    broker = SimulatedBroker(initial_cash, costs, allow_short=allow_short)
+    broker = SimulatedBroker(
+        initial_cash, costs, allow_short=allow_short, allow_fractional=sizing.allow_fractional
+    )
     ctx = _Context(frames)
     last_close: dict[str, float] = {}
     equity: dict[pd.Timestamp, float] = {}
     exposure: dict[pd.Timestamp, float] = {}
 
+    start = pd.Timestamp(trade_start) if trade_start is not None else None
     for ts in sorted(bars_by_time):
         bars = bars_by_time[ts]
+        now = ts.to_pydatetime()
+        if start is not None and ts < start:
+            ctx.advance(now, bars)
+            continue
         broker.process_bar(bars)
         last_close.update({s: b.close for s, b in bars.items()})
         equity[ts] = broker.portfolio.equity(last_close)
         exposure[ts] = broker.portfolio.exposure(last_close) / equity[ts]
 
-        now = ts.to_pydatetime()
         ctx.advance(now, bars)
         signals = strategy.on_bar(ctx)
         for signal in signals:
@@ -128,8 +141,10 @@ def run_backtest(
         for order in orders:
             broker.submit(order)
 
+    if not equity:
+        raise ValueError("aucune barre dans la période de trading demandée")
     if broker.open_orders:
-        log.info(f"{len(broker.open_orders)} ordre(s) non exécuté(s) en fin de backtest")
+        log.debug(f"{len(broker.open_orders)} ordre(s) non exécuté(s) en fin de backtest")
 
     series = pd.Series(equity, dtype="float64", name="equity")
     series.index.name = "timestamp"
@@ -142,4 +157,5 @@ def run_backtest(
         broker.rejected,
         broker.portfolio,
         broker.slippage_paid,
+        broker.resized,
     )

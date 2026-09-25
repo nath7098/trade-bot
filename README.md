@@ -26,6 +26,10 @@ uv run tradebot data check          # contrôle qualité des données locales
 uv run tradebot backtest            # rejoue une stratégie (défaut : buy_and_hold)
 uv run tradebot backtest --strategy buy_and_hold --start 2018-01-01 SPY QQQ
 uv run tradebot backtest --no-report  # tableau seulement, sans fichiers
+uv run tradebot strategies          # stratégies disponibles, paramètres, grilles
+uv run tradebot backtest --strategy trend --param lookback=150
+uv run tradebot optimize            # optimise toutes les stratégies, valide hors échantillon
+uv run tradebot optimize --strategy momentum --split 2022-01-01 --objective calmar
 ```
 
 Les données sont stockées dans `data/1d/<SYMBOLE>.parquet` (prix ajustés des splits et
@@ -42,6 +46,22 @@ max et durée, Calmar, exposition, rotation, commissions, slippage. Un rapport e
 dans `reports/<date>_<stratégie>/` : `equity.png`, `metrics.json`, `equity.csv`,
 `trades_*.csv`, `rejected_*.csv`.
 
+## Optimisation et validation hors échantillon
+
+`tradebot optimize` coupe l'historique à `optimization.split_date` :
+1. chaque combinaison de la grille est testée **sur la période d'apprentissage seulement** ;
+2. le réglage retenu est le plus **robuste** (meilleure médiane sur ses voisins dans la
+   grille), pas le meilleur isolé, qui est souvent un coup de chance ;
+3. il est évalué **une seule fois** sur la période de test, jamais vue, contre
+   l'achat-conservation.
+
+Règle d'or : ne pas relancer l'optimisation jusqu'à ce que le test « soit bon » —
+cela revient à optimiser sur le test et rend le résultat sans valeur.
+
+Stratégies disponibles : `buy_and_hold` (référence), `trend` (moyenne mobile),
+`momentum` (rotation mensuelle vers les actifs les plus performants, cash si tout baisse),
+`mean_reversion` (achat après une forte baisse en tendance haussière, RSI court).
+
 ## Développement
 
 ```bash
@@ -57,10 +77,11 @@ config/default.yaml     paramètres non sensibles
 src/tradebot/config/    chargement/validation de la config et des secrets
 src/tradebot/domain/    types purs : Bar, Signal, Order, Fill, Position, Portfolio
 src/tradebot/data/      source Alpaca, stockage Parquet, calendrier NYSE, contrôles qualité
-src/tradebot/strategy/  interface Strategy + stratégies (buy_and_hold)
+src/tradebot/strategy/  interface Strategy, indicateurs, stratégies
 src/tradebot/risk/      conversion exposition cible -> ordres (limites à venir)
 src/tradebot/execution/ modèle de coûts, broker simulé
-src/tradebot/backtest/  moteur de backtest barre par barre, métriques, rapports
+src/tradebot/backtest/  moteur de backtest, métriques, rapports, optimisation
+src/tradebot/research_cli.py  commandes strategies / backtest / optimize
 src/tradebot/logging_setup.py  logs console + JSON (logs/tradebot.jsonl)
 src/tradebot/cli.py     commandes `tradebot`
 tests/                  tests automatisés
@@ -73,9 +94,9 @@ tests/                  tests automatisés
 2. Données historiques (Alpaca) + cache Parquet + contrôles qualité ✅
 3. Backtester event-driven (frais, slippage, exécution à la barre suivante) ✅
 4. Métriques et rapports ✅
-5. Stratégie de référence
+5. Stratégies candidates + optimisation avec validation hors échantillon ✅
 6. Gestion du risque
-7. Validation robuste (walk-forward, sensibilité)
+7. Validation robuste (walk-forward, sensibilité aux coûts, sous-périodes)
 8. Paper trading Alpaca
 9. Monitoring et alertes
 10. Adapter Interactive Brokers (paper)

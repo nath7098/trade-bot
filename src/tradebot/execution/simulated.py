@@ -6,13 +6,17 @@ Règles d'exécution (volontairement conservatrices) :
 - ordre limite : exécuté à l'ouverture si elle est meilleure que la limite, sinon à la limite
   si le prix l'a touchée pendant la barre ; sinon annulé (validité : une barre) ;
 - ventes traitées avant les achats (le cash libéré sert aux achats de la même barre) ;
-- rejet si l'identifiant est déjà utilisé, si le cash est insuffisant (pas d'effet de
+- achat au marché plus cher que le cash disponible (écart entre la clôture où l'ordre a
+  été calculé et l'ouverture où il est exécuté) : quantité réduite au cash disponible
+  (`resize_buys`, comme un ordre « en montant » chez Alpaca), sinon rejet ;
+- rejet si l'identifiant est déjà utilisé, si le cash reste insuffisant (pas d'effet de
   levier) ou si la vente ouvrirait une position vendeuse non autorisée.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 
@@ -30,10 +34,21 @@ class OrderRecord:
 
 
 class SimulatedBroker:
-    def __init__(self, initial_cash: float, costs: CostModel, *, allow_short: bool = False) -> None:
+    def __init__(
+        self,
+        initial_cash: float,
+        costs: CostModel,
+        *,
+        allow_short: bool = False,
+        allow_fractional: bool = True,
+        resize_buys: bool = True,
+    ) -> None:
         self.portfolio = Portfolio(initial_cash)
         self._costs = costs
         self._allow_short = allow_short
+        self._allow_fractional = allow_fractional
+        self._resize_buys = resize_buys
+        self.resized = 0  # nombre d'achats réduits faute de cash
         self._records: dict[str, OrderRecord] = {}
         self._pending: list[str] = []
         self.fills: list[Fill] = []
@@ -82,15 +97,23 @@ class SimulatedBroker:
             record.reason = "limite non atteinte"
             return None
 
-        commission = self._costs.commission(order.quantity, price)
+        quantity = order.quantity
+        commission = self._costs.commission(quantity, price)
         held = self.portfolio.quantity(order.symbol)
-        if order.side is Side.BUY:
-            cost = order.quantity * price + commission
-            if held >= -QTY_EPSILON and cost > self.portfolio.cash + 1e-9:
-                record.reason = f"cash insuffisant ({cost:.2f} > {self.portfolio.cash:.2f})"
-                self._reject(record)
-                return None
-        elif not self._allow_short and order.quantity > held + QTY_EPSILON:
+        if order.side is Side.BUY and held >= -QTY_EPSILON:
+            cost = quantity * price + commission
+            if cost > self.portfolio.cash + 1e-9:
+                affordable = self._affordable(price) if self._resize_buys else 0.0
+                if affordable <= QTY_EPSILON:
+                    record.reason = f"cash insuffisant ({cost:.2f} > {self.portfolio.cash:.2f})"
+                    self._reject(record)
+                    return None
+                log.debug(f"achat {order.client_order_id} réduit : {quantity:g} -> {affordable:g}")
+                quantity = affordable
+                commission = self._costs.commission(quantity, price)
+                record.reason = f"quantité réduite à {affordable:g} faute de cash"
+                self.resized += 1
+        elif order.side is Side.SELL and not self._allow_short and quantity > held + QTY_EPSILON:
             record.reason = f"vente à découvert interdite (détenu : {held:g})"
             self._reject(record)
             return None
@@ -99,15 +122,24 @@ class SimulatedBroker:
             order.client_order_id,
             order.symbol,
             order.side,
-            order.quantity,
+            quantity,
             price,
             bar.timestamp,
             commission,
         )
         self.portfolio.apply_fill(fill)
-        self.slippage_paid += max(0.0, order.side.sign * (price - bar.open)) * order.quantity
+        self.slippage_paid += max(0.0, order.side.sign * (price - bar.open)) * quantity
         record.status = OrderStatus.FILLED
         return fill
+
+    def _affordable(self, price: float) -> float:
+        """Plus grande quantité achetable avec le cash disponible, frais compris."""
+        cash = self.portfolio.cash
+        quantity = cash / price
+        for _ in range(5):  # la commission dépend de la quantité : quelques ajustements
+            quantity = max(0.0, (cash - self._costs.commission(quantity, price)) / price)
+        quantity *= 1 - 1e-9  # marge contre les arrondis
+        return quantity if self._allow_fractional else float(math.floor(quantity))
 
     def _fill_price(self, order: Order, bar: Bar) -> float | None:
         if order.order_type is OrderType.MARKET:

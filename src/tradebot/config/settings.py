@@ -38,6 +38,14 @@ class Timeframe(StrEnum):
     HOUR = "1h"
 
 
+class OptimizationConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    # Date de coupure : apprentissage avant, test (hors échantillon) après.
+    split_date: date = date(2022, 1, 1)
+    objective: Literal["calmar", "sharpe", "sortino", "cagr"] = "calmar"
+
+
 class AppConfig(BaseModel):
     """Paramètres de l'application (non sensibles)."""
 
@@ -46,7 +54,7 @@ class AppConfig(BaseModel):
     mode: Mode = Mode.BACKTEST
     base_currency: str = "USD"
     initial_capital: float = Field(default=100.0, gt=0)
-    symbols: tuple[str, ...] = Field(default=("SPY",), min_length=1)
+    symbols: tuple[str, ...] = Field(default=("SPY", "QQQ", "TLT", "GLD"), min_length=1)
     timeframe: Timeframe = Timeframe.DAY
     # Flux Alpaca : "sip" (toutes les bourses US) ou "iex" (une seule bourse, volumes partiels).
     data_feed: Literal["sip", "iex"] = "sip"
@@ -57,6 +65,9 @@ class AppConfig(BaseModel):
     costs: CostModel = PRESETS["alpaca"]
     sizing: SizingConfig = SizingConfig()
     allow_short: bool = False
+    # Paramètres par stratégie, ex. {"trend": {"lookback": 150}} (voir `tradebot strategies`).
+    strategy_params: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    optimization: OptimizationConfig = OptimizationConfig()
     data_dir: Path = Path("data")
     log_dir: Path = Path("logs")
     report_dir: Path = Path("reports")

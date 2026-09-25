@@ -4,7 +4,8 @@
 mode: backtest
 base_currency: USD
 initial_capital: 100
-symbols: [SPY]
+# Actions US (SPY), tech (QQQ), obligations longues (TLT), or (GLD)
+symbols: [SPY, QQQ, TLT, GLD]
 # 1d (journalier) | 1h
 timeframe: 1d
 # sip (toutes bourses US, recommandé) | iex
@@ -19,6 +20,14 @@ sizing:
   min_trade_pct: 0.01   # ignore les ajustements < 1 % du capital
   min_order_value: 1.0
 allow_short: false
+# Paramètres des stratégies (défauts dans le code ; `tradebot strategies` pour la liste)
+strategy_params:
+  trend: {lookback: 200}
+  momentum: {lookback: 126, top_n: 1, absolute: true}
+  mean_reversion: {rsi_period: 2, entry: 10, exit: 70, trend_lookback: 200}
+optimization:
+  split_date: 2022-01-01   # apprentissage avant, test hors échantillon après
+  objective: calmar        # calmar | sharpe | sortino | cagr
 data_dir: data
 log_dir: logs
 report_dir: reports

@@ -13,6 +13,11 @@
 - Pas de look-ahead : un signal calculé sur la barre J s'exécute au plus tôt à la barre J+1.
 - Temps en UTC en interne.
 
+## Recherche de stratégies
+- Ne jamais présenter un résultat de backtest optimisé comme une performance attendue.
+- Toute optimisation se fait sur la période d'apprentissage ; la période de test ne sert qu'une fois.
+- Toujours comparer à `buy_and_hold` avec les mêmes frais ; signaler le nombre de combinaisons testées.
+
 ## Style
 - Python ≥ 3.11, typé (mypy strict), ruff. Code simple, pas d'abstraction prématurée.
 - Messages utilisateur et docstrings en français ; identifiants en anglais.

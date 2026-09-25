@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from tradebot.domain import Signal
-from tradebot.strategy.base import Strategy, StrategyContext
+from tradebot.strategy.base import Strategy, StrategyContext, StrategyParams
 
 
 class BuyAndHold(Strategy):
     name = "buy_and_hold"
 
-    def __init__(self, symbols: tuple[str, ...]) -> None:
+    def __init__(self, symbols: tuple[str, ...], params: StrategyParams | None = None) -> None:
+        super().__init__(symbols, params)
         self._weight = 1.0 / len(symbols)
         self._symbols = set(symbols)
         self._invested: set[str] = set()

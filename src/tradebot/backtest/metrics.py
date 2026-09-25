@@ -39,6 +39,7 @@ class Metrics:
     avg_exposure: float  # part moyenne du capital investie
     fills: int
     rejected: int
+    resized: int  # achats réduits faute de cash à l'exécution
     turnover: float  # montant échangé par an / capital moyen
     commissions: float
     slippage: float
@@ -116,6 +117,7 @@ def compute_metrics(result: BacktestResult, risk_free_rate: float = 0.0) -> Metr
         avg_exposure=float(result.exposure.mean()) if len(result.exposure) else math.nan,
         fills=len(result.fills),
         rejected=len(result.rejected),
+        resized=result.resized_orders,
         turnover=_ratio(traded / mean_equity, years),
         commissions=commissions,
         slippage=result.slippage_paid,

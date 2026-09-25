@@ -48,8 +48,8 @@ def test_market_order_fills_at_next_open_with_slippage_and_fees() -> None:
     assert broker.portfolio.cash == pytest.approx(1_000 - 200.2 - 1.0)
 
 
-def test_insufficient_cash_is_rejected() -> None:
-    broker = SimulatedBroker(100, FREE)
+def test_insufficient_cash_is_rejected_when_resizing_disabled() -> None:
+    broker = SimulatedBroker(100, FREE, resize_buys=False)
     broker.submit(order("o1", Side.BUY, 2))
     assert broker.process_bar({"SPY": bar(open_=60)}) == []
     assert broker.status("o1") is OrderStatus.REJECTED
@@ -57,8 +57,29 @@ def test_insufficient_cash_is_rejected() -> None:
     assert broker.portfolio.cash == 100
 
 
+def test_buy_is_resized_to_available_cash_fees_included() -> None:
+    costs = CostModel(commission_min=1.0, slippage_bps=0)
+    broker = SimulatedBroker(100, costs)
+    broker.submit(order("o1", Side.BUY, 2))  # 2 x 60 = 120 > 100
+    (fill,) = broker.process_bar({"SPY": bar(open_=60)})
+    assert fill.quantity == pytest.approx(99 / 60)  # 100 - 1 $ de commission
+    assert broker.portfolio.cash == pytest.approx(0, abs=1e-6)
+    assert broker.portfolio.cash >= 0
+    assert broker.resized == 1
+
+
+def test_whole_shares_resize_rounds_down_or_rejects() -> None:
+    broker = SimulatedBroker(100, FREE, allow_fractional=False)
+    broker.submit(order("o1", Side.BUY, 2))
+    (fill,) = broker.process_bar({"SPY": bar(open_=60)})
+    assert fill.quantity == 1
+    broker.submit(order("o2", Side.BUY, 1))
+    assert broker.process_bar({"SPY": bar(open_=60)}) == []  # 40 $ restants < 60 $
+    assert broker.status("o2") is OrderStatus.REJECTED
+
+
 def test_sells_are_processed_before_buys() -> None:
-    broker = SimulatedBroker(100, FREE)
+    broker = SimulatedBroker(100, FREE, resize_buys=False)
     broker.submit(order("buy-spy", Side.BUY, 1))
     broker.process_bar({"SPY": bar(open_=90)})
     # Plus assez de cash pour QQQ... sauf si la vente de SPY passe d'abord.

@@ -51,6 +51,7 @@ ROWS: list[tuple[str, str, Callable[[float], str]]] = [
     ("Exposition moyenne", "avg_exposure", lambda v: f"{v:.0%}"),
     ("Exécutions", "fills", lambda v: f"{v:.0f}"),
     ("Ordres rejetés", "rejected", lambda v: f"{v:.0f}"),
+    ("Achats réduits (cash)", "resized", lambda v: f"{v:.0f}"),
     ("Rotation annuelle", "turnover", lambda v: "n/d" if not math.isfinite(v) else f"{v:.1f}x"),
     ("Commissions", "commissions", _money),
     ("Slippage", "slippage", _money),
