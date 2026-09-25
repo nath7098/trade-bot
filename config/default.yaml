@@ -1,0 +1,12 @@
+# Configuration par défaut (non sensible). Les clés API vont dans .env (voir .env.example).
+
+# backtest | paper   ('live' est verrouillé dans le code)
+mode: backtest
+base_currency: USD
+initial_capital: 100
+symbols: [SPY]
+# 1d (journalier) | 1h
+timeframe: 1d
+data_dir: data
+log_dir: logs
+log_level: INFO
